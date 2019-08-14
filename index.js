@@ -10,7 +10,18 @@ var fs = require("fs");
 var request = require('request');
 var bodyParser = require('body-parser')
 var cors = require('cors')
-
+//Option to connect to mySQL server
+const options = {
+    client: 'mysql',
+    connection: {
+        host: '127.0.0.1',
+        user: 'root',
+        password: '123',
+        database: 'test'
+    }
+}
+//Connet to mySQL by knex
+const knex = require('knex')(options);
 // parse application/x-www-form-urlencoded
 app.use(bodyParser.urlencoded({ extended: false }))
 
@@ -36,11 +47,36 @@ app.get("/", function (req, res) {
 });
 app.get('/hienhanhs', function (req, res) {
     console.log(req.headers.authorization)
-    fetch('http://localhost:3000/hienhanhs')
-        .then(res => res.json())
-        .then(function (body) {
-            res.send(body);
-        });
+    knex.from('request').select("*").orderBy('id', 'desc')
+        .then((rows) => {
+            var data_response_array = [];
+            for (row of rows) {
+                var data_response = {
+                    id: row['id'],
+                    vip: null,
+                    time: null,
+                    phone: row['phone_client'],
+                    address: row['destination'],
+                    line: null,
+                    'num-driver': null,
+                    ddv: row['fullname'],
+                    dtv: null,
+                    'car-type': null,
+                    chanel: row['channel_id'],
+                    state: null
+                }
+                data_response_array.push(data_response);
+            }
+            res.send(data_response_array)
+        }).catch((err) => {
+            if (err)
+                console.log(err); throw err
+        })
+    // fetch('http://localhost:3000/hienhanhs')
+    //     .then(res => res.json())
+    //     .then(function (body) {
+    //         res.send(body);
+    //     });
 })
 app.get('/chotcos', function (req, res) {
     fetch('http://localhost:3000/chotcos')
@@ -57,7 +93,18 @@ app.get('/hengios', function (req, res) {
         });
 })
 app.post('/hienhanhs', function (req, res) {
-    request.post({
+    var request = [
+        {
+            fullname: req.body['ddv'],
+            phone_client: req.body['phone'],
+            destination: req.body['address']
+        }
+    ]
+
+    knex('request').insert(request).then(() => console.log("data inserted"))
+        .catch((err) => { res.send(err); throw err })
+    res.sendStatus(200);
+    /*request.post({
         url: 'http://localhost:3000/hienhanhs',
         body: req.body,
         json: true
@@ -68,25 +115,34 @@ app.post('/hienhanhs', function (req, res) {
         else {
             res.sendStatus(response.statusCode);
         }
-    });
+    });*/
 })
 app.get('/log-in', function (req, res) {
     res.sendFile(__dirname + "/index.html");
 })
 app.post('/token', function (req, res) {
-    qs = querystring.stringify(req.body)
-    fetch(`http://localhost:3000/nguoidungs?${qs}`)
+    knex('agency').where('username',req.body['username']).andWhere('password',req.body['password']).first().then(function(row){
+        if (row) {
+            let privateKey = fs.readFileSync('./private.pem', 'utf8');
+            let token = jwt.sign({ "body": "stuff" }, privateKey, { algorithm: 'HS256' });
+            res.send({ access_token: token, status: 200, username: row['fullname'], message: 'Đăng nhập thành công' });
+        }
+        else {
+            res.send({ access_token: null, status: 403, username: null, message: 'Sai tên đăng nhập hoặc mật khẩu' });
+        }
+    })
+    /*fetch(`http://localhost:3000/nguoidungs?${qs}`)
         .then(res => res.json())
         .then(function (body) {
             if (body[0]) {
                 let privateKey = fs.readFileSync('./private.pem', 'utf8');
                 let token = jwt.sign({ "body": "stuff" }, privateKey, { algorithm: 'HS256' });
-                res.send({ access_token: token, status: 200, username: body[0].fullname, message:'Đăng nhập thành công' });
+                res.send({ access_token: token, status: 200, username: body[0].fullname, message: 'Đăng nhập thành công' });
             }
             else {
-                res.send({ access_token: null, status: 403, username: null, message:'Sai tên đăng nhập hoặc mật khẩu' });
+                res.send({ access_token: null, status: 403, username: null, message: 'Sai tên đăng nhập hoặc mật khẩu' });
             }
-        });
+        });*/
 })
 app.get('/jwt', (req, res) => {
     let privateKey = fs.readFileSync('./private.pem', 'utf8');
